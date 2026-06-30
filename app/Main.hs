@@ -30,12 +30,15 @@ import           System.IO               (BufferMode (LineBuffering), hFlush, hS
 import           System.Process          (createProcess, proc, terminateProcess)
 
 import           Spotify
+import           Spotify.Audio.Cdn       (fetchEncryptedFileCdn)
 import           Spotify.Audio.Decrypt   (audioDecrypt)
 import           Spotify.Audio.Fetch     (fetchEncryptedFile)
 import           Spotify.Auth.Cache      (defaultCachePath, loadCredentials)
+import           Spotify.Auth.Modern     (modernTokens)
 import           Spotify.Id              (SpotifyId, fileIdRaw, idToRaw, parseTrackUri)
 import           Spotify.Metadata        (TrackInfo (..), afFileId, fetchAlbumTracks, fetchTrack,
                                           pickBestOgg)
+import           Spotify.Net.ApResolve   (resolveSpclient)
 
 -- ---------------------------------------------------------------------------
 -- types
@@ -54,6 +57,7 @@ data Player = Player
   , plQ     :: MVar ([QItem], Int)   -- queue + current index (-1 = nothing)
   , plCache :: IORef Cache
   , plCtr   :: IORef Int             -- temp-file counter
+  , plCdn   :: Maybe (ByteString, ByteString, String)   -- token, client-token, spclient host
   }
 
 data MpvMsg = MpvMsg
@@ -97,11 +101,16 @@ main = do
                 [ (1 :: Int, "time-pos"), (2, "duration"), (3, "pause") ]
           putStrLn "Connecting to Spotify…"
           sess  <- connect defaultConfig creds
+          mcdn  <- do
+            et <- modernTokens "0123456789abcdef0123456789abcdef01234567" creds
+            case et of
+              Right (tok, ct) -> do (sp, _) <- resolveSpclient; pure (Just (tok, ct, sp))
+              Left _          -> pure Nothing
           cache <- newIORef (Cache Nothing Nothing False)
           q     <- newMVar ([], -1)
           ctr   <- newIORef 0
           chan  <- newChan
-          let pl = Player sess mpv chan q cache ctr
+          let pl = Player sess mpv chan q cache ctr mcdn
           _ <- forkIO (readerLoop sock cache chan)
           _ <- forkIO (forever (readChan chan >>= handleCmd pl))
           banner
@@ -246,9 +255,15 @@ fetchOgg pl sid = do
         case ek of
           Left e    -> pure (Left ("key: " <> e))
           Right key -> do
-            ef <- fetchEncryptedFile (plSess pl) (afFileId best)
-                    (\g t -> putStr ("\r  buffering " <> show (g * 100 `div` max 1 t) <> "%   ")
-                             >> hFlush stdout)
+            let apProgress g t = putStr ("\r  buffering " <> show (g * 100 `div` max 1 t) <> "%   ")
+                                 >> hFlush stdout
+            ef <- case plCdn pl of
+              Just (tok, ct, sp) -> do
+                putStr "  buffering (CDN)… " >> hFlush stdout
+                r <- fetchEncryptedFileCdn tok ct sp (afFileId best)
+                either (const (fetchEncryptedFile (plSess pl) (afFileId best) apProgress))
+                       (pure . Right) r
+              Nothing -> fetchEncryptedFile (plSess pl) (afFileId best) apProgress
             case ef of
               Left e    -> pure (Left ("fetch: " <> e))
               Right enc -> case audioDecrypt key enc of
