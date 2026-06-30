@@ -1,0 +1,3 @@
+-- spotify-player builds against the local hespot checkout next door.
+packages: .
+          ../hespot

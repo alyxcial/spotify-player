@@ -1,0 +1,30 @@
+cabal-version:      3.0
+name:               spotify-player
+version:            0.1.0.0
+synopsis:           A terminal Spotify player built on hespot (queue + controls via mpv).
+description:
+  spotplay is a small interactive music player: give it tracks or albums, it
+  streams them through hespot, feeds the decrypted audio to mpv over its JSON IPC
+  socket, and gives you a queue with play / pause / next / prev / seek-free
+  controls and a live now-playing line. mpv does the actual audio + control;
+  hespot does the protocol, crypto and download.
+license:            MIT
+author:             alyxcial
+build-type:         Simple
+
+executable spotplay
+  hs-source-dirs:   app
+  main-is:          Main.hs
+  default-language: GHC2021
+  default-extensions:
+    OverloadedStrings
+    LambdaCase
+  ghc-options:      -Wall -threaded
+  build-depends:
+      base
+    , bytestring
+    , aeson
+    , network
+    , process
+    , directory
+    , hespot
