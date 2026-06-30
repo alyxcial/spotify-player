@@ -27,4 +27,9 @@ executable spotplay
     , network
     , process
     , directory
+    , text
+    , mtl
+    , vty
+    , brick
+    , JuicyPixels
     , hespot

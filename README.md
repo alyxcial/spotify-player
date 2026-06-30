@@ -1,57 +1,64 @@
 # spotify-player
 
-**A terminal Spotify player built on the [hespot](https://github.com/alyxcial/hespot)
-library.** Queue tracks and albums and control playback from a tiny REPL — mpv does
-the audio over its JSON IPC socket, hespot does the protocol, crypto and download.
+**A terminal Spotify player (TUI) built on the [hespot](https://github.com/alyxcial/hespot)
+library.** A brick/vty interface with a now-playing panel, **cover art rendered right in
+the terminal**, a progress bar and a queue — mpv plays the audio over its IPC socket,
+hespot fetches and decrypts the tracks over the CDN.
 
 > Educational / interoperability project. Use your own account; audio needs Premium.
 
+```text
+┌──────────┐  Now playing
+│ ▀▀▀▀▀▀▀▀ │  Blinding Lights
+│ ▀▀cover▀ │  The Weeknd
+│ ▀▀▀▀▀▀▀▀ │
+└──────────┘  ████████████░░░░░░░░░░  1:23 / 3:20   playing
+──────────────────────────────────────────────────
+ > 1. The Weeknd - Blinding Lights
+   2. The Weeknd - Starboy
+   3. The Weeknd - Save Your Tears
+──────────────────────────────────────────────────
+ ready   |  space pause · n/p next/prev · ↑↓ select · ⏎ play · a add · q quit
+```
+
 ## Requirements
 
-- **mpv** — the playback backend (controlled over its IPC socket).
+- **mpv** — the playback backend (driven over its JSON IPC socket).
 - Cached hespot credentials — run `hespot oauth-login` once.
 - The sibling **hespot** checkout next door (wired up in `cabal.project`).
+- A truecolor / 256-color terminal for the cover art (kitty, wezterm, foot, alacritty…).
 
-## Usage
+## Running
 
 ```sh
 cabal run spotplay
 ```
 
-Then, at the `spotplay>` prompt:
+It takes a few seconds to start (launching mpv, connecting, minting tokens), then the
+TUI appears.
 
-```text
-play <url>     play a track or album now (replaces the queue)
-queue <url>    add a track or album to the queue        (alias: add)
-pause          toggle pause / resume                    (alias: p)
-next | n       next track
-prev | b       previous track
-stop           stop playback
-now            current track + a progress bar
-ls             list the queue
-help | ?       this help
-quit | q       quit
-```
+## Keys
 
-A `<url>` is `spotify:track:…` / `spotify:album:…`, an `open.spotify.com` URL, or the
-bare base-62 id.
+| Key | Action |
+| --- | --- |
+| `o` or `/` | enter a URL to **play** now |
+| `a` | enter a URL to **add** to the queue |
+| `space` | pause / resume |
+| `n` | next track |
+| `p` / `b` | previous track |
+| `↑` `↓` / `k` `j` | move the queue selection |
+| `⏎` | play the selected queue item |
+| `s` | stop |
+| `q` / `Esc` | quit |
 
-```text
-spotplay> play spotify:album:4yP0hdKOZPNshxUOjY0cZj
-spotplay> now
-  1/14  The Weeknd - Alone Again
-  ████░░░░░░░░░░░░░░░░░░░░░░  0:42 / 4:10  playing
-spotplay> next
-```
+A URL is `spotify:track:…` / `spotify:album:…`, an `open.spotify.com` link, or the bare
+base-62 id. Adding an album expands it into the queue.
 
-## Note on buffering
+## Speed
 
-Audio is streamed over hespot's legacy access-point channel, which is slow — fetching
-an 8 MB track takes ~30–60 s (the same speed `spotdl` sees). So each track **buffers
-for a while before it starts** (you'll see `buffering NN%`); the queue still plays
-through, it's just not instant. The real fix is the CDN download path — resolve the
-file's CDN URL via the modern token stack and fetch it over HTTPS — a planned hespot
-improvement that would speed this up everywhere.
+Tracks are fetched over hespot's **CDN path** (login5 + client-token → `storage-resolve`
+→ HTTPS), so buffering is a few seconds, not the ~50 s of the legacy access-point channel.
+The first track also pays a one-time token setup at startup.
 
 ## Audio output
 
